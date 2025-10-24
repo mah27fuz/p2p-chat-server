@@ -190,4 +190,8 @@ server.listen(PORT, () => {
 ║   Encryption: END-TO-END              ║
 ╚════════════════════════════════════════╝
   `);
-});
+
+}); 
+setInterval(() => {
+  console.log('Keep-alive ping');
+}, 14 * 60 * 1000); 
