@@ -205,8 +205,8 @@ function sendToPeer(targetClientId, message) {
   }
 }
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+const PORT = process.env.PORT || 10000; // Render sets PORT automatically
+server.listen(PORT, '0.0.0.0', () => {  // Important: bind to 0.0.0.0
   console.log(`
 ╔════════════════════════════════════════╗
 ║   SECURE P2P SERVER ONLINE            ║
@@ -215,4 +215,8 @@ server.listen(PORT, () => {
 ║   Encryption: END-TO-END              ║
 ╚════════════════════════════════════════╝
   `);
+}); 
+server.on('error', (error) => {
+  console.error('Server error:', error);
+  process.exit(1);
 });
