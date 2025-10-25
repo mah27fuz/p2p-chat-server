@@ -1,4 +1,4 @@
-// Enhanced WebSocket Server with Group Call Support
+// Enhanced WebSocket Server with Accept/Reject Call Support
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -8,7 +8,15 @@ const app = express();
 app.use(cors());
 
 app.get('/', (req, res) => {
-  res.send('✅ P2P Server Running - Group Calls Enabled!');
+  res.status(200).send('✅ P2P Server Running - Group Calls Enabled!');
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 const server = http.createServer(app);
@@ -36,6 +44,7 @@ wss.on('connection', (ws) => {
       console.error('Parse error:', error);
     }
   });
+
   ws.on('close', () => {
     const client = clients.get(ws);
     if (client && client.roomCode) {
@@ -68,10 +77,10 @@ function handleMessage(ws, data) {
       });
       break;
       
-    case 'call-start':
-      // Notify all peers that someone started a call
-      broadcastToRoom(data.roomCode, ws, {
-        type: 'call-start',
+    case 'call-incoming':
+      // Send incoming call notification to specific peer
+      sendToPeer(data.targetPeer, {
+        type: 'call-incoming',
         callType: data.callType,
         username: data.username,
         from: data.from
@@ -79,7 +88,6 @@ function handleMessage(ws, data) {
       break;
       
     case 'call-offer':
-      // Send offer to specific peer
       sendToPeer(data.targetPeer, {
         type: 'call-offer',
         offer: data.offer,
@@ -89,7 +97,6 @@ function handleMessage(ws, data) {
       break;
       
     case 'call-answer':
-      // Send answer to specific peer
       sendToPeer(data.targetPeer, {
         type: 'call-answer',
         answer: data.answer,
@@ -98,7 +105,6 @@ function handleMessage(ws, data) {
       break;
       
     case 'ice-candidate':
-      // Send ICE candidate to specific peer
       sendToPeer(data.targetPeer, {
         type: 'ice-candidate',
         candidate: data.candidate,
@@ -106,8 +112,15 @@ function handleMessage(ws, data) {
       });
       break;
       
+    case 'call-rejected':
+      sendToPeer(data.targetPeer, {
+        type: 'call-rejected',
+        username: data.username,
+        from: data.from
+      });
+      break;
+      
     case 'call-end':
-      // Notify all that user left call
       broadcastToRoom(data.roomCode, ws, {
         type: 'call-end',
         username: data.username,
@@ -196,7 +209,6 @@ function broadcastToRoom(roomCode, senderWs, message) {
 }
 
 function sendToPeer(targetClientId, message) {
-  // Find the WebSocket connection for the target client
   for (const [ws, client] of clients.entries()) {
     if (client.clientId === targetClientId && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
@@ -205,17 +217,19 @@ function sendToPeer(targetClientId, message) {
   }
 }
 
-const PORT = process.env.PORT || 10000; // Render sets PORT automatically
-server.listen(PORT, '0.0.0.0', () => {  // Important: bind to 0.0.0.0
+const PORT = process.env.PORT || 10000;
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║   SECURE P2P SERVER ONLINE            ║
 ║   Port: ${PORT}                           ║
 ║   WebRTC: GROUP CALLS ENABLED         ║
-║   Encryption: END-TO-END              ║
+║   Features: ACCEPT/REJECT CALLS       ║
 ╚════════════════════════════════════════╝
   `);
-}); 
+});
+
 server.on('error', (error) => {
   console.error('Server error:', error);
   process.exit(1);
