@@ -1,4 +1,4 @@
-// Enhanced WebSocket Server with WebRTC Support
+// Enhanced WebSocket Server with Group Call Support
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -7,9 +7,8 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Health check endpoint for Render
 app.get('/', (req, res) => {
-  res.send('✅ P2P Server Running!');
+  res.send('✅ P2P Server Running - Group Calls Enabled!');
 });
 
 const server = http.createServer(app);
@@ -37,7 +36,6 @@ wss.on('connection', (ws) => {
       console.error('Parse error:', error);
     }
   });
-
   ws.on('close', () => {
     const client = clients.get(ws);
     if (client && client.roomCode) {
@@ -70,33 +68,50 @@ function handleMessage(ws, data) {
       });
       break;
       
-    case 'call-offer':
+    case 'call-start':
+      // Notify all peers that someone started a call
       broadcastToRoom(data.roomCode, ws, {
+        type: 'call-start',
+        callType: data.callType,
+        username: data.username,
+        from: data.from
+      });
+      break;
+      
+    case 'call-offer':
+      // Send offer to specific peer
+      sendToPeer(data.targetPeer, {
         type: 'call-offer',
         offer: data.offer,
-        callType: data.callType,
+        from: data.from,
         username: data.username
       });
       break;
       
     case 'call-answer':
-      broadcastToRoom(data.roomCode, ws, {
+      // Send answer to specific peer
+      sendToPeer(data.targetPeer, {
         type: 'call-answer',
-        answer: data.answer
+        answer: data.answer,
+        from: data.from
       });
       break;
       
     case 'ice-candidate':
-      broadcastToRoom(data.roomCode, ws, {
+      // Send ICE candidate to specific peer
+      sendToPeer(data.targetPeer, {
         type: 'ice-candidate',
-        candidate: data.candidate
+        candidate: data.candidate,
+        from: data.from
       });
       break;
       
     case 'call-end':
+      // Notify all that user left call
       broadcastToRoom(data.roomCode, ws, {
         type: 'call-end',
-        username: data.username
+        username: data.username,
+        from: data.from
       });
       break;
       
@@ -180,18 +195,24 @@ function broadcastToRoom(roomCode, senderWs, message) {
   });
 }
 
+function sendToPeer(targetClientId, message) {
+  // Find the WebSocket connection for the target client
+  for (const [ws, client] of clients.entries()) {
+    if (client.clientId === targetClientId && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+      return;
+    }
+  }
+}
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║   SECURE P2P SERVER ONLINE            ║
 ║   Port: ${PORT}                           ║
-║   WebRTC: ENABLED                     ║
+║   WebRTC: GROUP CALLS ENABLED         ║
 ║   Encryption: END-TO-END              ║
 ╚════════════════════════════════════════╝
   `);
-
-}); 
-setInterval(() => {
-  console.log('Keep-alive ping');
-}, 14 * 60 * 1000); 
+});
