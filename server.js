@@ -1,4 +1,4 @@
-// Enhanced WebSocket Server with Accept/Reject Call Support
+// Simplified WebSocket Server - No Call Features
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 
 app.get('/', (req, res) => {
-  res.status(200).send('✅ P2P Server Running - Group Calls Enabled!');
+  res.status(200).send('✅ P2P Server Running - Fast File Sharing!');
 });
 
 app.get('/health', (req, res) => {
@@ -20,7 +20,10 @@ app.get('/health', (req, res) => {
 });
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+  server,
+  maxPayload: 1024 * 1024 * 1024 // 1GB max message size
+});
 
 const rooms = new Map();
 const clients = new Map();
@@ -70,62 +73,30 @@ function handleMessage(ws, data) {
       });
       break;
       
-    case 'send-file':
+    case 'send-file-chunk':
+      // Forward file chunk to all peers
       broadcastToRoom(data.roomCode, ws, {
-        type: 'receive-file',
-        file: data.file
+        type: 'receive-file-chunk',
+        fileId: data.fileId,
+        chunk: data.chunk,
+        chunkIndex: data.chunkIndex,
+        totalChunks: data.totalChunks
       });
       break;
-      
-    case 'call-incoming':
-      // Send incoming call notification to specific peer
-      sendToPeer(data.targetPeer, {
-        type: 'call-incoming',
-        callType: data.callType,
-        username: data.username,
-        from: data.from
-      });
-      break;
-      
-    case 'call-offer':
-      sendToPeer(data.targetPeer, {
-        type: 'call-offer',
-        offer: data.offer,
-        from: data.from,
-        username: data.username
-      });
-      break;
-      
-    case 'call-answer':
-      sendToPeer(data.targetPeer, {
-        type: 'call-answer',
-        answer: data.answer,
-        from: data.from
-      });
-      break;
-      
-    case 'ice-candidate':
-      sendToPeer(data.targetPeer, {
-        type: 'ice-candidate',
-        candidate: data.candidate,
-        from: data.from
-      });
-      break;
-      
-    case 'call-rejected':
-      sendToPeer(data.targetPeer, {
-        type: 'call-rejected',
-        username: data.username,
-        from: data.from
-      });
-      break;
-      
-    case 'call-end':
+
+    case 'send-file-complete':
+      // Notify all peers that file is complete
       broadcastToRoom(data.roomCode, ws, {
-        type: 'call-end',
-        username: data.username,
-        from: data.from
+        type: 'receive-file-complete',
+        fileId: data.fileId,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        fileType: data.fileType,
+        sender: data.sender,
+        senderId: data.senderId,
+        timestamp: data.timestamp
       });
+      console.log(`>> File shared: ${data.fileName} (${(data.fileSize / 1024 / 1024).toFixed(2)} MB)`);
       break;
       
     case 'leave-room':
@@ -208,15 +179,6 @@ function broadcastToRoom(roomCode, senderWs, message) {
   });
 }
 
-function sendToPeer(targetClientId, message) {
-  for (const [ws, client] of clients.entries()) {
-    if (client.clientId === targetClientId && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
-      return;
-    }
-  }
-}
-
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, '0.0.0.0', () => {
@@ -224,8 +186,8 @@ server.listen(PORT, '0.0.0.0', () => {
 ╔════════════════════════════════════════╗
 ║   SECURE P2P SERVER ONLINE            ║
 ║   Port: ${PORT}                           ║
-║   WebRTC: GROUP CALLS ENABLED         ║
-║   Features: ACCEPT/REJECT CALLS       ║
+║   Max File Size: 1GB                  ║
+║   Fast Chunked Transfer               ║
 ╚════════════════════════════════════════╝
   `);
 });
